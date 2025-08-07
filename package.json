@@ -1,0 +1,32 @@
+{
+  "name": "web_solibra_chatbot",
+  "version": "1.0.0",
+  "description": "Aplikasi chatbot WhatsApp untuk Perpustakaan Umum Kota Solok",
+  "homepage": "https://github.com/topansidiq/web_solibra_chatbot#readme",
+  "bugs": {
+    "url": "https://github.com/topansidiq/web_solibra_chatbot/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/topansidiq/web_solibra_chatbot.git"
+  },
+  "license": "ISC",
+  "author": "Topan Sidiq",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.11.0",
+    "body-parser": "^2.2.0",
+    "crypto": "^1.0.1",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0",
+    "mysql2": "^3.14.3",
+    "node-fetch": "^3.3.2",
+    "puppeteer": "^24.16.0",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.31.0"
+  }
+}

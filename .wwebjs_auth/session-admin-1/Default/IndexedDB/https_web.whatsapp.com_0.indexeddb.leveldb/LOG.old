@@ -1,0 +1,19 @@
+2025/08/08-01:21:15.357 2358 Reusing MANIFEST C:\Users\topan\Desktop\Developments\web_solibra_chatbot\.wwebjs_auth\session-admin-1\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2025/08/08-01:21:15.358 2358 Recovering log #261
+2025/08/08-01:21:15.506 2358 Reusing old log C:\Users\topan\Desktop\Developments\web_solibra_chatbot\.wwebjs_auth\session-admin-1\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000261.log 
+2025/08/08-01:21:17.494 2794 Level-0 table #269: started
+2025/08/08-01:21:17.523 2794 Level-0 table #269: 417893 bytes OK
+2025/08/08-01:21:17.526 2794 Delete type=0 #261
+2025/08/08-01:21:17.527 2794 Manual compaction at level-0 from '\x00B\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00C\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/08/08-01:21:20.271 4c8 Compacting 1@1 + 4@2 files
+2025/08/08-01:21:20.511 4c8 Generated table #270@1: 72666 keys, 2274755 bytes
+2025/08/08-01:21:20.641 4c8 Generated table #271@1: 12093 keys, 2173717 bytes
+2025/08/08-01:21:20.875 4c8 Generated table #272@1: 62707 keys, 2213426 bytes
+2025/08/08-01:21:20.956 4c8 Generated table #273@1: 26494 keys, 554623 bytes
+2025/08/08-01:21:20.956 4c8 Compacted 1@1 + 4@2 files => 7216521 bytes
+2025/08/08-01:21:20.957 4c8 compacted to: files[ 0 0 4 0 0 0 0 ]
+2025/08/08-01:21:20.957 4c8 Delete type=2 #263
+2025/08/08-01:21:20.957 4c8 Delete type=2 #264
+2025/08/08-01:21:20.958 4c8 Delete type=2 #265
+2025/08/08-01:21:20.958 4c8 Delete type=2 #266
+2025/08/08-01:21:20.958 4c8 Delete type=2 #269
