@@ -25,7 +25,12 @@ function getExpiryDateTime() {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 module.exports = {
+  sleep,
   generateNumericOTP,
   getExpiryDateTime,
 };

@@ -8,28 +8,14 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const db = require("./db");
 const util = require("./util");
-
-// Server
-console.log("App start running");
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-// Middleware
-app.use(bodyParser.json());
-
-// Route
-app.get("/", (req, res) => {
-  res.send("Hello from chatbot + MySQL API!");
-});
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
-});
+const { getUserByPhoneNumber } = require("./src/controllers/UserController");
+const messageRoutes = require("./src/routes/sendMessage");
+const { getOTP } = require("./src/controllers/otpController");
 
 // Chatbot
 console.log("Chatbot Started!");
 
+const app = express();
 const client = new Client({
   puppeteer: {
     headless: true,
@@ -53,9 +39,8 @@ client.on("ready", () => {
   console.info("BOT READY");
 });
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+app.use(express.json());
+app.use("/api", messageRoutes(client));
 
 client.on("message", async (message) => {
   let phoneNumber = message.from.replace("@c.us", "");
@@ -64,7 +49,7 @@ client.on("message", async (message) => {
   }
   const user = await getUserByPhoneNumber(phoneNumber);
 
-  if (message.body === "1") {
+  if (message.body.toLocaleLowerCase === "otp") {
     await sleep(2000);
     await client.sendSeen(message.from);
     await sleep(4000);
@@ -77,26 +62,15 @@ client.on("message", async (message) => {
     await sleep(8000);
 
     if (!user) {
-      console.log(`Nomor ${phoneNumber} tidak ditemukan dalam database.`);
+      console.log(`Nomor ${phoneNumber} tidak terdaftar.`);
       return;
     }
-
-    await sleep(2000);
-    const OTP = util.generateNumericOTP();
-    const expires_at = util.getExpiryDateTime();
-    const otp = await createOTP(user.id, user.phone_number, OTP, expires_at);
-    await sleep(2000);
 
     try {
       console.info("Nomor HP terdeteksi: " + user.phone_number);
       console.info(JSON.stringify(user));
 
-      if (!otp) {
-        return client.sendMessage(
-          message.from,
-          "Gagal membuat OTP, coba beberapa saat lagi."
-        );
-      }
+      const otp = getOTP(phoneNumber, user.id);
 
       await client.sendMessage(
         message.from,
@@ -152,53 +126,3 @@ client.on("message", async (message) => {
     `[KODE:${message.body}] Permintaan tidak dimengerti`
   );
 });
-
-function getUserByPhoneNumber(phoneNumber) {
-  return new Promise((resolve, reject) => {
-    db.query(
-      "SELECT * FROM users WHERE phone_number = ?",
-      [phoneNumber],
-      (err, results) => {
-        if (err) return reject(err);
-        if (results.length === 0) return resolve(null);
-        resolve(results[0]); // hanya ambil 1 user
-      }
-    );
-  });
-}
-function createOTP(userId, phoneNumber, code, expires_at) {
-  return new Promise((resolve, reject) => {
-    db.query(
-      "INSERT INTO otps (user_id, phone_number, code, expires_at) VALUES (?, ?, ?, ?)",
-      [userId, phoneNumber, code, expires_at],
-      (err, results) => {
-        if (err) return reject(err);
-
-        // Cek jika berhasil insert
-        if (results.affectedRows > 0) {
-          resolve({
-            id: results.insertId,
-            code,
-            userId,
-            expires_at,
-          });
-        } else {
-          resolve(null);
-        }
-      }
-    );
-  });
-}
-
-function markOTPVerified(code) {
-  return new Promise((resolve, reject) => {
-    db.query(
-      "UPDATE otps SET verified = 1 WHERE code = ? AND expires_at > NOW() AND verified = 0",
-      [code],
-      (err, results) => {
-        if (err) return reject(err);
-        resolve(results.affectedRows > 0);
-      }
-    );
-  });
-}
