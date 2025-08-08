@@ -1,4 +1,6 @@
 # Laravel & PHP
+/.wwebjs_auth
+/.wwebjs_cache
 /vendor
 /node_modules
 /public/storage
