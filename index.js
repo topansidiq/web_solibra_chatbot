@@ -1,128 +1,164 @@
 require("dotenv").config();
 const QR_CODE = require("qrcode-terminal");
-const fs = require("fs");
-const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
-const axios = require("axios");
-const fetch = require("node-fetch");
+const { Client, LocalAuth } = require("whatsapp-web.js");
 const express = require("express");
-const bodyParser = require("body-parser");
-const db = require("./db");
 const util = require("./util");
 const { getUserByPhoneNumber } = require("./src/controllers/UserController");
-const messageRoutes = require("./src/routes/sendMessage");
-const { getOTP } = require("./src/controllers/otpController");
+const { getOTP, sendOTP } = require("./src/controllers/otpController");
+const { welcome } = require("./message/message");
 
 // Chatbot
-console.log("Chatbot Started!");
+console.log("Chatbot App Started!");
 
 const app = express();
 const client = new Client({
-  puppeteer: {
-    headless: true,
-  },
-  authStrategy: new LocalAuth({
-    clientId: "admin-1",
-  }),
+	puppeteer: { headless: true },
+	authStrategy: new LocalAuth({ clientId: "admin-1" }),
 });
 
 client.on("authenticated", (session) => {
-  console.info("AUTHENTICATED", session);
+	console.info("AUTHENTICATED", session);
+});
+
+client.on("qr", (qr) => {
+	QR_CODE.generate(qr, { small: true });
+});
+
+client.on("ready", () => {
+	console.info("BOT READY");
 });
 
 client.initialize();
 
-client.on("qr", (qr) => {
-  QR_CODE.generate(qr, { small: true });
-});
-
-client.on("ready", () => {
-  console.info("BOT READY");
-});
-
 app.use(express.json());
-app.use("/api", messageRoutes(client));
 
+/**
+ * Helper format number
+ */
+function formatPhoneTo62(phone) {
+	let clean = phone.replace(/\D/g, "");
+	if (clean.startsWith("0")) {
+		clean = "62" + clean.substring(1);
+	}
+	return clean;
+}
+
+/**
+ * Route for api send message
+ */
+app.post("/api/send-message", async (req, res) => {
+	const token = req.headers.authorization?.split(" ")[1];
+	if (token !== process.env.LARAVEL_TOKEN) {
+		return res.status(401).json({ message: "Unauthorized" });
+	}
+
+	const { phone_number, message } = req.body;
+	if (!phone_number || !message) {
+		return res
+			.status(400)
+			.json({ message: "phone_number and message are required" });
+	}
+
+	try {
+		const formattedNumber = formatPhoneTo62(phone_number);
+		const chatId = `${formattedNumber}@c.us`;
+		await client.sendMessage(chatId, message);
+
+		return res.status(200).json({
+			status: "Sent",
+			to: formattedNumber,
+			message,
+		});
+	} catch (err) {
+		console.error("Error sending message: ", err);
+		return res
+			.status(500)
+			.json({ message: "Failed to send message", error: err.message });
+	}
+});
+
+app.listen(process.env.APP_PORT, () => {
+	console.log(`Server running at http://localhost:${process.env.APP_PORT}`);
+});
+
+/**
+ * Handler message from user
+ */
 client.on("message", async (message) => {
-  let phoneNumber = message.from.replace("@c.us", "");
-  if (phoneNumber.startsWith("62")) {
-    phoneNumber = "0" + phoneNumber.slice(2);
-  }
-  const user = await getUserByPhoneNumber(phoneNumber);
+	try {
 
-  if (message.body.toLocaleLowerCase === "otp") {
-    await sleep(2000);
-    await client.sendSeen(message.from);
-    await sleep(4000);
+		let phoneNumber = message.from.replace("@c.us", "");
+		if (phoneNumber.startsWith("62")) {
+			phoneNumber = "0" + phoneNumber.slice(2);
+		}
 
-    client.sendMessage(
-      message.from,
-      `[KODE:${message.body}] Permintaan dimengerti\n\nPermintaan OTP untuk verifikasi WhatsApp berhasil dikirimkan. Silakan menunggu beberapa saat!`
-    );
+		let user;
+		try {
+			user = await getUserByPhoneNumber(phoneNumber);
+		} catch (err) {
+			console.error(err);
+			return client.sendMessage(message.from, "Gagal memproses nomor anda!");
+		}
 
-    await sleep(8000);
+		// Welcome message
+		client.sendMessage(message.from, welcome([user.name]));
 
-    if (!user) {
-      console.log(`Nomor ${phoneNumber} tidak terdaftar.`);
-      return;
-    }
+		if (message.body.toLowerCase() === "otp") {
+			await util.sleep(2000);
+			await client.sendSeen(message.from);
+			await util.sleep(4000);
 
-    try {
-      console.info("Nomor HP terdeteksi: " + user.phone_number);
-      console.info(JSON.stringify(user));
+			client.sendMessage(
+				message.from,
+				`[KODE:${message.body}] Permintaan dimengerti\n\nPermintaan OTP untuk verifikasi WhatsApp berhasil dikirimkan. Silakan menunggu beberapa saat!`
+			);
 
-      const otp = getOTP(phoneNumber, user.id);
+			await util.sleep(8000);
 
-      await client.sendMessage(
-        message.from,
-        `[OTP] Kode OTP Anda adalah: *${otp.code}*. Berlaku selama 15 menit.`
-      );
-      return;
-    } catch (error) {
-      console.error(error.message);
-      if (error.response && error.response.status === 404) {
-        client.sendMessage(
-          message.from,
-          "Nomor Anda tidak terdaftar di sistem."
-        );
-      } else {
-        client.sendMessage(
-          message.from,
-          "Terjadi kesalahan saat memproses permintaan."
-        );
-      }
-    }
-  }
+			if (!user) {
+				console.log(`Nomor ${phoneNumber} tidak terdaftar.`);
+				return;
+			}
 
-  if (/^\d{6}$/.test(message.body)) {
-    const otpCode = message.body;
-    await sleep(1000);
-    console.log(`Menerima OTP: ${otpCode} dari ${phoneNumber}`);
+			try {
+				console.info("Nomor HP terdeteksi: " + user.phone_number);
+				const otp = await getOTP(user.user_id, user.phone_number);
 
-    const success = await markOTPVerified(otpCode);
-    await sleep(2000);
+				if (!otp) {
+					return client.sendMessage(
+						message.from,
+						"Gagal membuat OTP. Coba lagi!"
+					);
+				}
 
-    console.log(`Verifikasi OTP status: ${success}`);
+				await sendOTP(user.user_id, message.from);
 
-    if (success) {
-      return client.sendMessage(
-        message.from,
-        "✅ OTP berhasil diverifikasi. Sekarang status keanggotaan anda menjadi aktif."
-      );
-    } else {
-      return client.sendMessage(
-        message.from,
-        "❌ OTP salah atau sudah kadaluarsa."
-      );
-    }
-  }
+				return;
+			} catch (error) {
+				console.error(error.message);
+				if (error.response && error.response.status === 404) {
+					client.sendMessage(
+						message.from,
+						"Nomor Anda tidak terdaftar di sistem."
+					);
+				} else {
+					client.sendMessage(
+						message.from,
+						"Terjadi kesalahan saat memproses permintaan."
+					);
+				}
+			}
+		}
 
-  // Default handler jika pesan bukan kode OTP 6 digit dan bukan "1"
-  await sleep(4000);
-  await client.sendSeen(message.from);
-  await sleep(5000);
-
-  return client.sendMessage(
-    message.from,
-    `[KODE:${message.body}] Permintaan tidak dimengerti`
-  );
+		// Default handler
+		await util.sleep(4000);
+		await client.sendSeen(message.from);
+		await util.sleep(5000);
+		return client.sendMessage(
+			message.from,
+			`[KODE:${message.body}] Permintaan tidak dimengerti`
+		);
+	} catch (error) {
+		console.error(error);
+	}
 });

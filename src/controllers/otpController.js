@@ -3,7 +3,7 @@ const { default: axios } = require("axios");
 async function getOTP(userId, phoneNumber) {
   try {
     const { data } = await axios.post(
-      `${process.env.LARAVEL_URL}/puks/api/otp/get`,
+      `${process.env.LARAVEL_URL}/api/puks/otp/get`,
       { user_id: userId, phone_number: phoneNumber },
       {
         headers: {
@@ -13,13 +13,32 @@ async function getOTP(userId, phoneNumber) {
         },
       }
     );
+
     return data;
   } catch (error) {
-    if (error.response) {
-      throw error.response.data;
-    } else {
-      throw error.message;
-    }
+    console.error("getOTP failed:", error.response?.data || error.message);
+    return null; // atau { error: true, message: "..."}
+  }
+}
+
+async function sendOTP(userId, phoneNumber) {
+  try {
+    const { data } = await axios.post(
+      `${process.env.LARAVEL_URL}/api/puks/wa/send-otp`,
+      { user_id: userId, phone_number: phoneNumber },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.LARAVEL_TOKEN}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+      }
+    );
+
+    return data;
+  } catch (error) {
+    console.error("getOTP failed:", error.response?.data || error.message);
+    return null; // atau { error: true, message: "..."}
   }
 }
 
@@ -38,4 +57,5 @@ function markOTPVerified(code) {
 
 module.exports = {
   getOTP,
+  sendOTP,
 };
