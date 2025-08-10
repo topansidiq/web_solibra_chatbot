@@ -1,0 +1,157 @@
+// MODE OTP / EXTEND / RETURN
+	// if (input === "otp" || input === "extend" || input === "return") {
+
+	// 	if (input === "otp") {
+	// 		session.attempts = 0;
+	// 		session.lastReply = null;
+	// 		sessions.set(key, session);
+
+	// 		logs.message(phoneNumber);
+	// 		logs.prompt([message.body.toUpperCase(), phoneNumber]);
+
+	// 		await util.sleep(2000);
+	// 		await client.sendSeen(message.from);
+
+	// 		await util.sleep(4000);
+	// 		client.sendMessage(message.from, otp().opening(message.body));
+
+	// 		await util.sleep(8000);
+
+	// 		try {
+	// 			logs.createOTP(user.phone_number);
+	// 			await util.sleep(2000);
+	// 			const data = await getOTP(user.user_id, user.phone_number);
+
+	// 			if (!data) {
+	// 				logs.createOTPFail();
+	// 				return client.sendMessage(message.from, otp().failure2());
+	// 			}
+
+	// 			logs.createOTPSuccess([data.otp, phoneNumber]);
+	// 			await sendOTP(user.user_id, user.phone_number);
+	// 			logs.replayOTP([phoneNumber, JSON.stringify(data)]);
+	// 		} catch (error) {
+	// 			errors.errorCreateOTP(error);
+	// 			client.sendMessage(message.from, "Terjadi kesalahan saat memproses permintaan.");
+	// 		}
+	// 	}
+
+	// 	if (isOverdue || input === "return") {
+
+	// 		session.attempts = 0;
+	// 		session.lastReply = null;
+	// 		sessions.set(key, session);
+
+	// 		await util.sleep(4000);
+	// 		client.sendMessage(message.from, returned.opening);
+
+	// 		await util.sleep(4000);
+	// 		let msg = "";
+
+	// 		const overdueBorrows = user.borrows.filter(borrow => borrow.status === "overdue");
+
+	// 		overdueBorrows.forEach((borrow) => {
+
+	// 			if (borrow.status != "overdue") {
+	// 				return;
+	// 			}
+
+	// 			const borrowedAtFormatted = new Date(borrow.borrowed_at).toLocaleString("id-ID", {
+	// 				day: "2-digit",
+	// 				month: "long",
+	// 				year: "numeric"
+	// 			});
+
+	// 			msg += `> Peminjaman ${borrow.id} - ${borrow.book.title} | ${borrowedAtFormatted} | Status: ${borrow.status}\n\n`;
+	// 		});
+
+	// 		await util.sleep(4000);
+	// 		client.sendMessage(message.from, msg);
+	// 		client.sendMessage(message.body, returned.selectBook);
+
+	// 		if (/^\d+$/.test(message.body)) {
+	// 			await util.sleep(4000);
+	// 			client.sendMessage(message.from, returned.selectedBookToReturn(message.body));
+
+	// 			return;
+	// 		}
+
+	// 		return;
+	// 	}
+
+	// 	if (input === "extend" && user.is_phone_verified === 1 && !isOverdue) {
+
+	// 		session.attempts = 0;
+	// 		session.lastReply = null;
+	// 		sessions.set(key, session);
+
+	// 		await util.sleep(4000);
+	// 		client.sendMessage(message.from, extend.opening(message.body));
+
+	// 		await util.sleep(4000);
+	// 		client.sendMessage(message.from, "Berikut ini adalah daftar peminjaman anda yang aktif!");
+
+	// 		await util.sleep(4000);
+	// 		if (user.borrows && user.borrows.length > 0) {
+	// 			let msg = "";
+
+	// 			user.borrows.forEach((borrow) => {
+	// 				const borrowedAtFormatted = new Date(borrow.borrowed_at).toLocaleString("id-ID", {
+	// 					day: "2-digit",
+	// 					month: "long",
+	// 					year: "numeric"
+	// 				});
+
+	// 				msg += `> Peminjaman ${borrow.id} - ${borrow.book.title} | ${borrowedAtFormatted} | Status: ${borrow.status}\n\n`;
+	// 			});
+
+	// 			client.sendMessage(message.from, msg);
+
+	// 			await util.sleep(4000);
+	// 			client.sendMessage(message.from, extend.selectBook);
+
+	// 			if (/^\d+$/.test(message.body)) {
+	// 				const borrowId = message.body;
+	// 				session.attempts = 0;
+	// 				session.lastReply = null;
+	// 				sessions.set(key, session);
+
+	// 				await util.sleep(4000);
+	// 				client.sendMessage(message.from, extend.selectedBookToExtend(message.body));
+
+	// 				await util.sleep(4000);
+	// 				await extendBook(Number(borrowId));
+	// 			} else {
+	// 				session.attempts = 0;
+	// 				session.lastReply = null;
+	// 				sessions.set(key, session);
+	// 				client.sendMessage(message.from, "Input salah atau id peminjaman tidak tersedia.");
+	// 			}
+	// 		}
+	// 	}
+
+	// 	if (input === "show_borrow") {
+	// 		session.attempts = 0;
+	// 		session.lastReply = null;
+	// 		sessions.set(key, session);
+
+	// 		await util.sleep(4000);
+
+	// 		if (user.borrows && user.borrows.length > 0) {
+	// 			let msg = "";
+
+	// 			user.borrows.forEach((borrow, index) => {
+	// 				const borrowedAtFormatted = new Date(borrow.borrowed_at).toLocaleString("id-ID", {
+	// 					day: "2-digit",
+	// 					month: "long",
+	// 					year: "numeric"
+	// 				});
+
+	// 				msg += `> Peminjaman ${index + 1} - ${borrow.book.title} | ${borrowedAtFormatted} | Status: ${borrow.status}\n\n`;
+	// 			});
+
+	// 			client.sendMessage(message.from, msg);
+	// 		}
+	// 	}
+	// 	return;
+	// }
