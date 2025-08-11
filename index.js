@@ -3,12 +3,12 @@ const QR_CODE = require("qrcode-terminal");
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const express = require("express");
 const util = require("./src/utils/util");
-const { getUserByPhoneNumber } = require("./src/controllers/UserController");
-const { getOTP, sendOTP } = require("./src/controllers/otpController");
+const { getUserByPhoneNumber } = require("./src/services/userService");
+const { getOTP, sendOTP } = require("./src/services/otpService");
 const { welcome, otp, wrongPrompt, notExistingUser, wrongPrompt2, activatedChatbot, notVerifyNumber, suspendedMember, extend, returned } = require("./resource/message");
 const { Helper } = require("./src/helper/helper");
 const { logs, errors } = require("./resource/logging");
-const { extendBook, getAdmin, sendNotificationToAdmin } = require("./src/controllers/borrowController");
+const { extendBook, getAdmin, sendNotificationToAdmin } = require("./src/services/borrowService");
 const { getUserState, setUserState } = require("./src/handlers/userStateHandler");
 
 // Chatbot
@@ -86,11 +86,15 @@ client.on("message", async (message) => {
 
 	let user;
 
+	// Cek apakah nomor terdaftar di database dan masukkan ke variabel user
 	try {
 		logs.checkingNumber(phoneNumber);
 		await util.sleep(2000);
+
+		// Isi user dengan memanggil API dari Laravel
 		user = await getUserByPhoneNumber(phoneNumber);
 
+		// Jika nomor tidak terdaftar
 		if (!user) {
 			client.sendMessage(message.from, notExistingUser([phoneNumber, process.env.LARAVEL_URL]));
 			return;
@@ -101,15 +105,19 @@ client.on("message", async (message) => {
 		return client.sendMessage(message.from, "Gagal memproses nomor anda!");
 	}
 
+	// Jika user ada cek apakah ada peminjaman yang jatuh tempo
 	let isOverdue = user.borrows.some(borrow => borrow.status === "overdue");
 
-	// MODE START BOT
+	// Bot mulai
 	if (input === "/bot") {
 		await setUserState(phoneNumber, 'welcome');
 		return await client.sendMessage(message.from, welcome(user.name));
 	}
 
+	// Cek jika status pengirim pesan saat ini adalah pertama kali
 	if (state === 'welcome') {
+
+		// Jika isi pesan adalah otp
 		if (input === 'otp') {
 			logs.message(phoneNumber);
 			logs.prompt([message.body.toUpperCase(), phoneNumber]);
@@ -120,6 +128,7 @@ client.on("message", async (message) => {
 			await util.sleep(4000);
 			client.sendMessage(message.from, otp().opening(message.body));
 
+			// Buat OTP dan kirimkan
 			try {
 				await util.sleep(8000);
 				logs.createOTP(user.phone_number);
@@ -133,7 +142,11 @@ client.on("message", async (message) => {
 				await util.sleep(4000);
 				logs.createOTPSuccess([data.otp, phoneNumber]);
 				logs.replayOTP([phoneNumber, JSON.stringify(data)]);
+
+				// Kirim OTP dengan memanggil API dari Laravel
 				await sendOTP(user.user_id, user.phone_number);
+
+				// Tetapkan status pengirim pesan saat ini
 				await setUserState(phoneNumber, 'otp_received');
 
 			} catch (error) {
@@ -144,14 +157,21 @@ client.on("message", async (message) => {
 
 		} else if (input === "extend" && user.is_phone_verified != null && !isOverdue) {
 
+			/** Bagian ini adalah jika pesan masuk adalah extend dan
+			 * nomor whatsapp telah terverifikasi 
+			 * Cek terlebih dahulu apakah status pengguna berdasarkan
+			 * data yang diperoleh dari cek user
+			*/
 			if (user.member_status == 'suspend') {
 				client.sendMessage(message.from, suspendedMember());
 				return;
 			}
 
+			// Jika melewati filter status suspend kirimkan pesan pembuka untuk perpanjangan buku
 			await util.sleep(4000);
 			client.sendMessage(message.from, extend.opening(message.body));
 
+			// Kirimkan pesan berisi daftar peminjaman yang tersedia
 			await util.sleep(4000);
 			client.sendMessage(message.from, "Berikut ini adalah daftar peminjaman anda yang aktif!");
 
@@ -172,8 +192,11 @@ client.on("message", async (message) => {
 				client.sendMessage(message.from, msg);
 
 				await util.sleep(4000);
+
+				// Tetapkan status saat ini adalah menunggu konfirmasi perpanjangan
 				await setUserState(phoneNumber, "extend_waiting");
 
+				// Mengirim notifikasi kepada admin bahwa ada perpanjangan
 				await util.sleep(2000);
 				let admin;
 				try {
@@ -185,16 +208,22 @@ client.on("message", async (message) => {
 				await util.sleep(2000);
 				await sendNotificationToAdmin(admin.id, admin.phone_number);
 
+				// Balasa pesan user bahwa dia telah melakukan perpanjangan
 				return client.sendMessage(message.from, extend.selectBook);
 
 			}
 		} else if (isOverdue || input === "return") {
+
+			/**
+			 * Ini adalah bagian jika pesan masuk adalah return
+			 */
 			await util.sleep(4000);
 			client.sendMessage(message.from, returned.opening);
 
 			await util.sleep(4000);
 			let msg = "";
 
+			// Ambil daftar peminjaman yang jatuh tempo
 			const overdueBorrows = user.borrows.filter(borrow => borrow.status === "overdue");
 
 			overdueBorrows.forEach((borrow) => {
@@ -209,14 +238,20 @@ client.on("message", async (message) => {
 			});
 
 			await util.sleep(4000);
+
+			// Tetapkan status saat ini
 			await setUserState(phoneNumber, 'return_waiting');
+
+			// Kirimkan daftar peminjaman
 			client.sendMessage(message.from, msg);
 			return client.sendMessage(message.body, returned.selectBook);
+
 		} else {
 			return await client.sendMessage(message.from, welcome(user.name));
 		}
 	}
 
+	// Jika status saat ini adalah menunggu konfirmasi perpanjangan
 	if (state === 'extend_waiting' || state === 'extend_fail' || user.member_status === 'active') {
 		if (/^\d+$/.test(input)) {
 
@@ -234,6 +269,7 @@ client.on("message", async (message) => {
 		}
 	}
 
+	// Jika status saaat ini adalah menunggu proses pengembalian
 	if (state === 'return_waiting') {
 		if (/^\d+$/.test(message.body)) {
 			await util.sleep(4000);
