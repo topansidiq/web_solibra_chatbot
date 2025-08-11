@@ -8,7 +8,7 @@ const { getOTP, sendOTP } = require("./src/controllers/otpController");
 const { welcome, otp, wrongPrompt, notExistingUser, wrongPrompt2, activatedChatbot, notVerifyNumber, suspendedMember, extend, returned } = require("./resource/message");
 const { Helper } = require("./src/helper/helper");
 const { logs, errors } = require("./resource/logging");
-const { extendBook } = require("./src/controllers/borrowController");
+const { extendBook, getAdmin, sendNotificationToAdmin } = require("./src/controllers/borrowController");
 const { getUserState, setUserState } = require("./src/handlers/userStateHandler");
 
 // Chatbot
@@ -173,6 +173,18 @@ client.on("message", async (message) => {
 
 				await util.sleep(4000);
 				await setUserState(phoneNumber, "extend_waiting");
+
+				await util.sleep(2000);
+				let admin;
+				try {
+					admin = await getAdmin();
+				} catch (error) {
+					console.error(error.message);
+				}
+
+				await util.sleep(2000);
+				await sendNotificationToAdmin(admin.id, admin.phone_number);
+
 				return client.sendMessage(message.from, extend.selectBook);
 
 			}
