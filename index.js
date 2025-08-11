@@ -3,12 +3,12 @@ const QR_CODE = require("qrcode-terminal");
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const express = require("express");
 const util = require("./src/utils/util");
-const { getUserByPhoneNumber } = require("./src/controllers/UserController");
-const { getOTP, sendOTP } = require("./src/controllers/otpController");
+const { getUserByPhoneNumber } = require("./src/services/userService");
+const { getOTP, sendOTP } = require("./src/services/otpService");
+const { extendBook, getAdmin, sendNotificationToAdmin } = require("./src/services/borrowService");
 const { welcome, otp, wrongPrompt, notExistingUser, wrongPrompt2, activatedChatbot, notVerifyNumber, suspendedMember, extend, returned } = require("./resource/message");
 const { Helper } = require("./src/helper/helper");
 const { logs, errors } = require("./resource/logging");
-const { extendBook, getAdmin, sendNotificationToAdmin } = require("./src/controllers/borrowController");
 const { getUserState, setUserState } = require("./src/handlers/userStateHandler");
 
 // Chatbot
@@ -80,167 +80,174 @@ const sessions = new Map();
  * Handler message from user
  */
 client.on("message", async (message) => {
-	const phoneNumber = Helper.formatPhoneTo08(message.from.replace('@c.us', ""));
-	const state = await getUserState(phoneNumber)
-	const input = message.body.toLowerCase().trim();
-
-	let user;
-
 	try {
-		logs.checkingNumber(phoneNumber);
-		await util.sleep(2000);
-		user = await getUserByPhoneNumber(phoneNumber);
+		const phoneNumber = Helper.formatPhoneTo08(message.from.replace('@c.us', ''));
+		const state = await getUserState(phoneNumber);
+		const input = message.body.toLowerCase().trim();
 
-		if (!user) {
-			client.sendMessage(message.from, notExistingUser([phoneNumber, process.env.LARAVEL_URL]));
+		let user;
+
+		try {
+			logs.checkingNumber(phoneNumber);
+			await util.sleep(2000);
+			user = await getUserByPhoneNumber(phoneNumber);
+
+			if (!user) {
+				await client.sendMessage(message.from, notExistingUser([phoneNumber, process.env.LARAVEL_URL]));
+				return;
+			}
+			logs.isNumberExists([user, user.phone_number]);
+		} catch (err) {
+			errors.failToCheckingNumber([phoneNumber, err]);
+			await client.sendMessage(message.from, "Gagal memproses nomor anda!");
 			return;
 		}
-		logs.isNumberExists([user, user.phone_number]);
-	} catch (err) {
-		errors.failToCheckingNumber([phoneNumber, err]);
-		return client.sendMessage(message.from, "Gagal memproses nomor anda!");
-	}
 
-	let isOverdue = user.borrows.some(borrow => borrow.status === "overdue");
+		const isOverdue = user.borrows.some(borrow => borrow.status === "overdue");
 
-	// MODE START BOT
-	if (input === "/bot") {
-		await setUserState(phoneNumber, 'welcome');
-		return await client.sendMessage(message.from, welcome(user.name));
-	}
+		// Mode start bot
+		if (input === "/bot") {
+			await setUserState(phoneNumber, 'welcome');
+			return await client.sendMessage(message.from, String(welcome(user.name)));
+		}
 
-	if (state === 'welcome') {
-		if (input === 'otp') {
-			logs.message(phoneNumber);
-			logs.prompt([message.body.toUpperCase(), phoneNumber]);
+		if (input === "/show" || state === 'active') {
+			return client.sendMessage(message.from, '> Daftar Perintah Chatbot\n\n> otp - Aktivasi Akun\n> extend - Perpanjangan Peminjaman\n> return - Pengembalian\n> /show - Melihat Daftar Perintah\n> /show_borrow - Melihat Daftar Peminjaman\n> /profile - Melihat Data Pengguna');
+		}
 
-			await util.sleep(4000);
-			await client.sendSeen(message.from);
+		if (state === 'welcome') {
+			if (input === 'otp') {
 
-			await util.sleep(4000);
-			client.sendMessage(message.from, otp().opening(message.body));
+				logs.message(phoneNumber);
+				logs.prompt([message.body.toUpperCase(), phoneNumber]);
 
-			try {
-				await util.sleep(8000);
-				logs.createOTP(user.phone_number);
-				const data = await getOTP(user.user_id, user.phone_number);
+				await util.sleep(4000);
+				await client.sendSeen(message.from);
 
-				if (!data) {
-					logs.createOTPFail();
-					return client.sendMessage(message.from, otp().failure2());
+				await util.sleep(4000);
+				await client.sendMessage(message.from, String(otp().opening(message.body)));
+
+				try {
+					await util.sleep(8000);
+					logs.createOTP(user.phone_number);
+					const data = await getOTP(user.user_id, user.phone_number);
+
+					if (!data) {
+						logs.createOTPFail();
+						return await client.sendMessage(message.from, String(otp().failure2()));
+					}
+
+					await util.sleep(4000);
+					logs.createOTPSuccess([data.otp, phoneNumber]);
+					logs.replayOTP([phoneNumber, JSON.stringify(data)]);
+
+					await sendOTP(user.user_id, user.phone_number);
+					await setUserState(phoneNumber, 'otp_received');
+				} catch (error) {
+					await util.sleep(4000);
+					errors.errorCreateOTP(error);
+					await client.sendMessage(message.from, "Terjadi kesalahan saat memproses permintaan.");
+				}
+
+			} else if (input === "extend" && user.is_phone_verified != null && !isOverdue) {
+
+				if (user.member_status === 'suspend') {
+					await client.sendMessage(message.from, String(suspendedMember()));
+					return;
 				}
 
 				await util.sleep(4000);
-				logs.createOTPSuccess([data.otp, phoneNumber]);
-				logs.replayOTP([phoneNumber, JSON.stringify(data)]);
-				await sendOTP(user.user_id, user.phone_number);
-				await setUserState(phoneNumber, 'otp_received');
+				await client.sendMessage(message.from, String(extend.opening(message.body)));
 
-			} catch (error) {
 				await util.sleep(4000);
-				errors.errorCreateOTP(error);
-				client.sendMessage(message.from, "Terjadi kesalahan saat memproses permintaan.");
-			}
+				await client.sendMessage(message.from, "Berikut ini adalah daftar peminjaman anda yang aktif!");
 
-		} else if (input === "extend" && user.is_phone_verified != null && !isOverdue) {
+				await util.sleep(4000);
+				if (user.borrows && user.borrows.length > 0) {
+					let msg = "";
 
-			if (user.member_status == 'suspend') {
-				client.sendMessage(message.from, suspendedMember());
-				return;
-			}
+					user.borrows.forEach((borrow) => {
+						const borrowedAtFormatted = new Date(borrow.borrowed_at).toLocaleString("id-ID", {
+							day: "2-digit",
+							month: "long",
+							year: "numeric"
+						});
 
-			await util.sleep(4000);
-			client.sendMessage(message.from, extend.opening(message.body));
+						msg += `> Peminjaman ${borrow.id} - ${borrow.book.title} | ${borrowedAtFormatted} | Status: ${borrow.status}\n\n`;
+					});
 
-			await util.sleep(4000);
-			client.sendMessage(message.from, "Berikut ini adalah daftar peminjaman anda yang aktif!");
+					await client.sendMessage(message.from, msg);
 
-			await util.sleep(4000);
-			if (user.borrows && user.borrows.length > 0) {
+					await util.sleep(4000);
+					await setUserState(phoneNumber, "extend_waiting");
+
+					await util.sleep(2000);
+					let admin;
+					try {
+						admin = await getAdmin();
+					} catch (error) {
+						console.error(error.message);
+					}
+
+					await util.sleep(2000);
+					await sendNotificationToAdmin(admin.id, admin.phone_number);
+
+					return await client.sendMessage(message.from, String(extend.selectBook));
+				}
+			} else if (isOverdue || input === "return") {
+				await util.sleep(4000);
+				await client.sendMessage(message.from, String(returned.opening));
+
+				await util.sleep(4000);
 				let msg = "";
 
-				user.borrows.forEach((borrow) => {
+				const overdueBorrows = user.borrows.filter(borrow => borrow.status === "overdue");
+
+				overdueBorrows.forEach((borrow) => {
 					const borrowedAtFormatted = new Date(borrow.borrowed_at).toLocaleString("id-ID", {
 						day: "2-digit",
 						month: "long",
 						year: "numeric"
 					});
-
 					msg += `> Peminjaman ${borrow.id} - ${borrow.book.title} | ${borrowedAtFormatted} | Status: ${borrow.status}\n\n`;
 				});
 
-				client.sendMessage(message.from, msg);
+				await util.sleep(4000);
+				await setUserState(phoneNumber, 'return_waiting');
+
+				await client.sendMessage(message.from, msg);
+				return await client.sendMessage(message.from, String(returned.selectBook));
+			} else {
+				return await client.sendMessage(message.from, String(welcome(user.name)));
+			}
+		}
+
+		if (state === 'extend_waiting' || state === 'extend_fail' || user.member_status === 'active') {
+			if (/^\d+$/.test(input)) {
+				const borrowId = message.body;
 
 				await util.sleep(4000);
-				await setUserState(phoneNumber, "extend_waiting");
+				await client.sendMessage(message.from, String(extend.selectedBookToExtend(message.body)));
 
-				await util.sleep(2000);
-				let admin;
-				try {
-					admin = await getAdmin();
-				} catch (error) {
-					console.error(error.message);
-				}
-
-				await util.sleep(2000);
-				await sendNotificationToAdmin(admin.id, admin.phone_number);
-
-				return client.sendMessage(message.from, extend.selectBook);
-
+				await util.sleep(4000);
+				await extendBook(Number(borrowId));
+				await setUserState(phoneNumber, `extended_book_${borrowId}`);
+			} else {
+				await setUserState(phoneNumber, 'extend_fail');
+				return await client.sendMessage(message.from, "Input salah atau id peminjaman tidak tersedia. Periksa daftar peminjaman anda dengan kirim /show_borrow atau /bot melihat daftar perintah yang tersedia");
 			}
-		} else if (isOverdue || input === "return") {
-			await util.sleep(4000);
-			client.sendMessage(message.from, returned.opening);
-
-			await util.sleep(4000);
-			let msg = "";
-
-			const overdueBorrows = user.borrows.filter(borrow => borrow.status === "overdue");
-
-			overdueBorrows.forEach((borrow) => {
-
-				const borrowedAtFormatted = new Date(borrow.borrowed_at).toLocaleString("id-ID", {
-					day: "2-digit",
-					month: "long",
-					year: "numeric"
-				});
-
-				msg += `> Peminjaman ${borrow.id} - ${borrow.book.title} | ${borrowedAtFormatted} | Status: ${borrow.status}\n\n`;
-			});
-
-			await util.sleep(4000);
-			await setUserState(phoneNumber, 'return_waiting');
-			client.sendMessage(message.from, msg);
-			return client.sendMessage(message.body, returned.selectBook);
-		} else {
-			return await client.sendMessage(message.from, welcome(user.name));
 		}
-	}
 
-	if (state === 'extend_waiting' || state === 'extend_fail' || user.member_status === 'active') {
-		if (/^\d+$/.test(input)) {
-
-			const borrowId = message.body;
-
-			await util.sleep(4000);
-			client.sendMessage(message.from, extend.selectedBookToExtend(message.body));
-
-			await util.sleep(4000);
-			await extendBook(Number(borrowId));
-			await setUserState(phoneNumber, `extended_book_${borrowId}`);
-		} else {
-			await setUserState(phoneNumber, 'extend_fail');
-			return client.sendMessage(message.from, "Input salah atau id peminjaman tidak tersedia. Periksa daftar peminjaman anda dengan kirim /show_borrow atau /bot melihat daftar perintah yang tersedia");
+		if (state === 'return_waiting') {
+			if (/^\d+$/.test(message.body)) {
+				await util.sleep(4000);
+				await setUserState(phoneNumber, 'overdue_detected');
+				return await client.sendMessage(message.from, String(returned.selectedBookToReturn(message.body)));
+			}
 		}
-	}
-
-	if (state === 'return_waiting') {
-		if (/^\d+$/.test(message.body)) {
-			await util.sleep(4000);
-			await setUserState(phoneNumber, 'overdue_detected');
-			return client.sendMessage(message.from, returned.selectedBookToReturn(message.body));
-		}
+	} catch (e) {
+		console.error("Error in message handler:", e);
+		// Optionally send a fallback message here:
+		// await client.sendMessage(message.from, "Terjadi kesalahan, silakan coba lagi.");
 	}
 });
-
-
