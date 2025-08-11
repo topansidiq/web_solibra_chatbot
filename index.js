@@ -114,11 +114,15 @@ client.on("message", async (message) => {
 		return await client.sendMessage(message.from, welcome(user.name));
 	}
 
+	if (input === "/show") {
+		return client.sendMessage(message.from, '> Daftar Perintah Chatbot\n\n> otp - Aktivasi Akun\n> extend - Perpanjangan Peminjaman\n> return - Pengembalian\n> /show - Melihat Daftar Perintah\n> /show_borrow - Melihat Daftar Peminjaman\n> /profile - Melihat Data Pengguna');
+	}
+
 	// Cek jika status pengirim pesan saat ini adalah pertama kali
 	if (state === 'welcome') {
 
 		// Jika isi pesan adalah otp
-		if (input === 'otp') {
+		if (input === 'otp' && user.member_status === 'active') {
 			logs.message(phoneNumber);
 			logs.prompt([message.body.toUpperCase(), phoneNumber]);
 
