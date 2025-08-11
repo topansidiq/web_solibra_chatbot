@@ -122,7 +122,7 @@ client.on("message", async (message) => {
 	if (state === 'welcome') {
 
 		// Jika isi pesan adalah otp
-		if (input === 'otp' && user.member_status === 'active') {
+		if (input === 'otp' && user.member_status !== 'active') {
 			logs.message(phoneNumber);
 			logs.prompt([message.body.toUpperCase(), phoneNumber]);
 
