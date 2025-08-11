@@ -26,15 +26,15 @@ module.exports = {
     },
     extend: {
         opening: (param) => {
-            return `[${param.toUpperCase()}] Permintaan dimengerti\n\nPermintaan EXTEND untuk melakukan perpanjangan peminjaman berhasil dikirimkan. Sistem sedang memeriksa status peminjaman. Harap menunggu!\n\n> SHOW_BORROW - untuk melihat riwayat peminjaman anda`
+            return `> [${param.toUpperCase()}] Permintaan dimengerti\n\nPermintaan EXTEND untuk melakukan perpanjangan peminjaman berhasil dikirimkan. Sistem sedang memeriksa status peminjaman. Harap menunggu!\n\n> /show_borrow untuk melihat riwayat peminjaman anda`
         },
-        selectBook: "Pilih buku yang ingin perpanjang dengan mengirim nomor peminjaman contoh (1)",
+        selectBook: "Pilih buku yang ingin diperpanjang dengan mengirim nomor peminjaman contoh (1)",
         selectedBookToExtend: (book) => {
             return `Anda telah memilih peminjaman ${book}. Konfirmasi perpanjangan akan diproses.`
         }
     },
     returned: {
-        opening: "Anda memiliki buku yang sudah jatuh tempo. Harap melakukan pengembalian agar dapat menggunakan Layanan Peminjaman dan Perpanjangan. Berikut ini adalah daftar peminjaman anda yang sudah jatuh tempo:",
+        opening: "> Layanan Chatbot Perpustakaan Umum Kota Solok\n\nAnda memiliki buku yang sudah jatuh tempo. Harap melakukan pengembalian agar dapat menggunakan Layanan Peminjaman dan Perpanjangan. Berikut ini adalah daftar peminjaman anda yang sudah jatuh tempo:",
         selectBook: "Pilih buku yang ingin dikembalikan dengan mengirim nomor peminjaman contoh (1)",
         selectedBookToReturn: (book) => {
             return `Anda telah memilih peminjaman ${book}. Konfirmasi pengembalian akan diproses. Silahkan mengantarkan buku ke Perpustakaan.`
