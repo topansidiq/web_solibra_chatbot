@@ -119,10 +119,10 @@ client.on("message", async (message) => {
 	}
 
 	// Cek jika status pengirim pesan saat ini adalah pertama kali
-	if (state === 'welcome') {
+	if (state === 'welcome' || state === "extend_witing" ) {
 
 		// Jika isi pesan adalah otp
-		if (input === 'otp' && user.member_status !== 'active') {
+		if (input === 'otp') {
 			logs.message(phoneNumber);
 			logs.prompt([message.body.toUpperCase(), phoneNumber]);
 
@@ -151,7 +151,7 @@ client.on("message", async (message) => {
 				await sendOTP(user.user_id, user.phone_number);
 
 				// Tetapkan status pengirim pesan saat ini
-				await setUserState(phoneNumber, 'otp_received');
+				await setUserState(phoneNumber, 'welcome');
 
 			} catch (error) {
 				await util.sleep(4000);
@@ -210,13 +210,19 @@ client.on("message", async (message) => {
 				}
 
 				await util.sleep(2000);
-				await sendNotificationToAdmin(admin.id, admin.phone_number);
+				// await sendNotificationToAdmin(admin.id, admin.phone_number);
 
 				// Balasa pesan user bahwa dia telah melakukan perpanjangan
 				return client.sendMessage(message.from, extend.selectBook);
 
 			}
 		} else if (isOverdue || input === "return") {
+
+			// Jika user tetap kirim return tetapi tidak ada buku yang overdue
+			if (!isOverdue) {
+				await setUserState('welcome');
+				return client.sendMessage(message.from, 'Anda tidak memiliki buku yang jatuh tempo. Silahkan datang ke Perpustakaan Umum Kota Solok untuk melakukan pengembalian buku.');
+			}
 
 			/**
 			 * Ini adalah bagian jika pesan masuk adalah return
@@ -264,9 +270,14 @@ client.on("message", async (message) => {
 			await util.sleep(4000);
 			client.sendMessage(message.from, extend.selectedBookToExtend(message.body));
 
+			if (user.borrows.extend === 3) {
+				await setUserState(phoneNumber, 'welcome');
+				return client.sendMessage(message.from, "Anda telah mencapai batas perpanjangan sebanyak tiga(3) kali. Silahkan memerikan tanggal jatuh tempo. Terima kasih!");
+			}
+
 			await util.sleep(4000);
 			await extendBook(Number(borrowId));
-			await setUserState(phoneNumber, `extended_book_${borrowId}`);
+			await setUserState(phoneNumber, `welcome`);
 		} else {
 			await setUserState(phoneNumber, 'extend_fail');
 			return client.sendMessage(message.from, "Input salah atau id peminjaman tidak tersedia. Periksa daftar peminjaman anda dengan kirim /show_borrow atau /bot melihat daftar perintah yang tersedia");
