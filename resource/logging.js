@@ -1,6 +1,6 @@
 module.exports = {
     logs: {
-        message: (param) => {
+        messageFrom: (param) => {
             return console.log('[Message] from ', param);
         },
         replayOTP: (params) => {

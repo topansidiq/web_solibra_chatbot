@@ -3,13 +3,13 @@ const QR_CODE = require("qrcode-terminal");
 const { Client, LocalAuth } = require("whatsapp-web.js");
 const express = require("express");
 const util = require("./src/utils/util");
-const { getUserByPhoneNumber } = require("./src/services/userService");
+const { getUserByPhoneNumber } = require("./src/utils/userService");
 const { getOTP, sendOTP } = require("./src/services/otpService");
 const { extendBook, getAdmin, sendNotificationToAdmin } = require("./src/services/borrowService");
-const { welcome, otp, wrongPrompt, notExistingUser, wrongPrompt2, activatedChatbot, notVerifyNumber, suspendedMember, extend, returned } = require("./resource/message");
+const { welcome, otp, wrongPrompt, notExistingUser, wrongPrompt2, activatedChatbot, notVerifyNumber, suspendedMember, extend, returned, messages } = require("./resource/message");
 const { Helper } = require("./src/helper/helper");
 const { logs, errors } = require("./resource/logging");
-const { getUserState, setUserState } = require("./src/handlers/userStateHandler");
+const { getUserState, setUserState, setPermanentUserState, getPermanentUserState } = require("./src/handlers/userStateHandler");
 
 // Chatbot
 console.log("Chatbot App Started!");
@@ -75,14 +75,17 @@ app.listen(process.env.APP_PORT, () => {
 });
 
 const sessions = new Map();
-
+sessions.set("session", 0);
 /**
  * Handler message from user
  */
 client.on("message", async (message) => {
+
+
 	try {
 		const phoneNumber = Helper.formatPhoneTo08(message.from.replace('@c.us', ''));
 		const state = await getUserState(phoneNumber);
+		const permanentState = await getPermanentUserState(phoneNumber);
 		const input = message.body.toLowerCase().trim();
 
 		let user;
@@ -91,7 +94,6 @@ client.on("message", async (message) => {
 			logs.checkingNumber(phoneNumber);
 			await util.sleep(2000);
 			user = await getUserByPhoneNumber(phoneNumber);
-
 			if (!user) {
 				await client.sendMessage(message.from, notExistingUser([phoneNumber, process.env.LARAVEL_URL]));
 				return;
@@ -105,20 +107,58 @@ client.on("message", async (message) => {
 
 		const isOverdue = user.borrows.some(borrow => borrow.status === "overdue");
 
+		// Mode melihat daftar perintah
+		if (["/show", "show", "sow"].includes(input)) {
+			return client.sendMessage(message.from, messages.show);
+		}
+
+		if (user.is_phone_verified === 1) {
+			await setPermanentUserState(phoneNumber, 'verified');
+		} else if (user.is_phone_verified === 0 && permanentState !== 'verified' && !['otp', 'return', 'extend'].includes(input)) {
+			sessions.set("user", "unverified");
+
+			if (sessions.get('user') === 'spam') {
+				sessions.clear();
+				return client.sendMessage(message.from, 'Perintah salah, ketik dan kirim *OTP*.')
+			}
+			if (sessions.get("session") == 0) {
+				sessions.set('session', sessions.get('session') + 1);
+				return client.sendMessage(message.from, messages.forUnverifiedUserAndUnverifiedNumber);
+			}
+			if (sessions.get("session") == 1) {
+				sessions.set('session', sessions.get('session') + 1);
+				return client.sendMessage(message.from, messages.forUnverifiedUserAndUnverifiedNumber2);
+			}
+			if (sessions.get("session") == 2) {
+				sessions.set("session", 0);
+				sessions.set("user", "spam");
+				return client.sendMessage(message.from, messages.forUnverifiedUserAndUnverifiedNumber3);
+			}
+
+			return;
+		}
+
 		// Mode start bot
-		if (input === "/bot") {
+		if (['/bot', 'bot', 'bt', 'bpt'].includes(input)) {
 			await setUserState(phoneNumber, 'welcome');
 			return await client.sendMessage(message.from, String(welcome(user.name)));
 		}
 
-		if (input === "/show" || state === 'active') {
-			return client.sendMessage(message.from, '> Daftar Perintah Chatbot\n\n> otp - Aktivasi Akun\n> extend - Perpanjangan Peminjaman\n> return - Pengembalian\n> /show - Melihat Daftar Perintah\n> /show_borrow - Melihat Daftar Peminjaman\n> /profile - Melihat Data Pengguna');
+
+		// Tentang chatbot / /about
+		if (['about', '/about', 'aboit', 'aboyt', 'anout'].includes(input)) {
+			return client.sendMessage(message.from, messages.about);
 		}
 
-		if (state === 'welcome') {
+		if (state === 'welcome' || ['otp', 'return', 'extend'].includes(input)) {
 			if (input === 'otp') {
 
-				logs.message(phoneNumber);
+				if (user.is_phone_verified === 1) {
+					await setPermanentUserState(phoneNumber, 'verified');
+					return client.sendMessage(message.from, messages.forVerifiedUser(message.body, user.name))
+				}
+
+				logs.messageFrom(phoneNumber);
 				logs.prompt([message.body.toUpperCase(), phoneNumber]);
 
 				await util.sleep(4000);
@@ -142,7 +182,7 @@ client.on("message", async (message) => {
 					logs.replayOTP([phoneNumber, JSON.stringify(data)]);
 
 					await sendOTP(user.user_id, user.phone_number);
-					await setUserState(phoneNumber, 'otp_received');
+					await setUserState(phoneNumber, 'welcome');
 				} catch (error) {
 					await util.sleep(4000);
 					errors.errorCreateOTP(error);
