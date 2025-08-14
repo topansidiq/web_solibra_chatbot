@@ -55,6 +55,7 @@ app.post("/api/send-message", async (req, res) => {
 	try {
 		const formattedNumber = Helper.formatPhoneTo62(phone_number);
 		const chatId = `${formattedNumber}@c.us`;
+		await util.sleep(4000);
 		await client.sendMessage(chatId, message);
 
 		return res.status(200).json({
@@ -112,6 +113,7 @@ client.on("message", async (message) => {
 			return client.sendMessage(message.from, messages.show);
 		}
 
+		// Cek perintah salah berulang dan verifikasi nomor
 		if (user.is_phone_verified === 1) {
 			await setPermanentUserState(phoneNumber, 'verified');
 		} else if (user.is_phone_verified === 0 && permanentState !== 'verified' && !['otp', 'return', 'extend'].includes(input)) {
@@ -143,7 +145,6 @@ client.on("message", async (message) => {
 			await setUserState(phoneNumber, 'welcome');
 			return await client.sendMessage(message.from, String(welcome(user.name)));
 		}
-
 
 		// Tentang chatbot / /about
 		if (['about', '/about', 'aboit', 'aboyt', 'anout'].includes(input)) {
